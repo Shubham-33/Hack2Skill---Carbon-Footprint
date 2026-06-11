@@ -1,12 +1,47 @@
-/* Sprout front-end: one analyse call, the swap loop, what-if, and the Grove.
- * Distribution (reminders, digest, share) uses Google/WhatsApp URL-specs — no OAuth. */
+/* Sprout front-end: one smart input that auto-routes to six checks
+ * (savings / trip / claim / shop / worth / lookup), each with a tailored renderer,
+ * a savings-plan ledger, and Google/WhatsApp URL-spec dispatch. */
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const STORAGE_KEY = "sprout:v1";
-const SAMPLE = "Drove 20 km to work, had a beef burger for lunch, ran the AC for 3 hours, took a 15 minute hot shower";
 
-let lastSwap = null; // remembered for the Calendar reminder + Grove "Did it"
+const MODES = {
+  auto: {
+    hint: "Paste anything — a bill, a trip, a product, an eco-claim, an order, or ask “is solar worth it?”. Sprout detects what you need.",
+    sample: "My electricity bill is around ₹3,200 a month with two ACs running most of the day.",
+  },
+  savings: {
+    hint: "Paste your bill, fuel, or monthly spend → specific actions that save real ₹ + carbon.",
+    sample: "Monthly electricity bill ₹3,200 with two ACs ~6 hours a day, plus ₹4,000/month on petrol commuting.",
+  },
+  trip: {
+    hint: "Describe a trip → options ranked by carbon, cost and time.",
+    sample: "I need to travel from Mumbai to Pune, about 150 km. I usually drive — greener options?",
+  },
+  shop: {
+    hint: "Paste an order, cart, or receipt → footprint + cheaper-greener swaps.",
+    sample: "My grocery order: 2 kg beef, a packet of imported cheese, 6 plastic water bottles, 5 kg rice.",
+  },
+  worth: {
+    hint: "Ask about a big purchase → personalised payback in ₹, kg and years.",
+    sample: "Is rooftop solar worth it for a home with a ₹3,000/month electricity bill in Mumbai?",
+  },
+  claim: {
+    hint: "Paste an “eco-friendly” marketing line → legit or greenwashing, and why.",
+    sample: "This fast-fashion brand says its collection is “100% sustainable and carbon neutral, made from eco-conscious fabrics”.",
+  },
+  lookup: {
+    hint: "Ask “what's the footprint of X?” → a number + a relatable comparison.",
+    sample: "What's the carbon footprint of a one-way flight from Mumbai to Delhi?",
+  },
+};
+
+const LABEL = {
+  savings: "Find savings 💰", trip: "Greener trip 🚆", claim: "Eco-claim 🔍",
+  shop: "Shopping 🛒", worth: "Worth it? ⚖️", lookup: "Footprint 📊",
+};
+
+let currentMode = "auto";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,203 +74,233 @@ function toast(message, actions = [], sticky = false) {
   if (!sticky) setTimeout(() => el.remove(), 6000);
 }
 
-const CATEGORY_ICON = { transport: "🚗", food: "🍔", energy: "⚡", other: "📦", general: "📦" };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const EFFORT_TINT = { easy: "#2f9e44", medium: "#e8973c", hard: "#c94c3c" };
+const VERDICT = {
+  legit: { label: "Looks legit ✅", color: "#2f9e44" },
+  mixed: { label: "Mixed — be careful ⚠️", color: "#e8973c" },
+  greenwashing: { label: "Greenwashing 🚩", color: "#c94c3c" },
+  "worth it": { label: "Worth it ✅", color: "#2f9e44" },
+  borderline: { label: "Borderline ⚖️", color: "#e8973c" },
+  "not yet": { label: "Not yet 🚩", color: "#c94c3c" },
+};
 
 // ---------------------------------------------------------------------------
-// Analyse a day
+// Mode switching
 // ---------------------------------------------------------------------------
-async function analyze() {
-  const activity = $("activity").value.trim();
-  if (!activity) { toast("Tell me about your day first 🙂"); return; }
-  $("analyze").disabled = true;
-  $("analyze").textContent = "Analysing…";
-  try {
-    const data = await postJSON("/api/log", { activity });
-    renderResult(data);
-    persist({ activity, result: data });
-  } catch (e) {
-    toast(e.message);
-  } finally {
-    $("analyze").disabled = false;
-    $("analyze").innerHTML = 'Analyse my day <span class="text-white/70 text-xs ml-1">⌘↵</span>';
-  }
-}
-
-function renderResult(data) {
-  $("summary").textContent = data.summary;
-  $("equivalence").textContent = data.equivalence;
-
-  const g = data.gauge;
-  const pct = Math.min(100, Math.round(g.ratio * 100));
-  const bar = $("gauge-bar");
-  bar.style.width = pct + "%";
-  const colors = { green: "#2f9e44", amber: "#e8973c", red: "#c94c3c" };
-  bar.style.background = colors[g.level];
-  $("gauge-label").textContent = g.label + ` (target ${g.target_kg} kg/day)`;
-  const pill = $("gauge-pill");
-  pill.textContent = g.level === "green" ? "On track" : g.level === "amber" ? "Close" : "Over";
-  pill.style.background = colors[g.level] + "22";
-  pill.style.color = colors[g.level];
-
-  const sprout = $("sprout");
-  sprout.textContent = g.level === "green" ? "🌳" : g.level === "amber" ? "🌿" : "🌱";
-  sprout.classList.toggle("sprout-grow", g.level === "green");
-
-  const items = $("items");
-  items.innerHTML = "";
-  data.items.forEach((it) => {
-    const li = document.createElement("li");
-    li.className = "bg-white rounded-lg border border-black/5 p-3 flex justify-between";
-    li.innerHTML =
-      `<span>${CATEGORY_ICON[it.category] || "📦"} ${it.label}</span>` +
-      `<span class="font-semibold">${it.kg} kg</span>`;
-    items.appendChild(li);
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll(".mode-tab").forEach((t) => {
+    const on = t.dataset.mode === mode;
+    t.setAttribute("aria-selected", on ? "true" : "false");
+    t.classList.toggle("mode-tab-active", on);
   });
-
-  lastSwap = data.swap;
-  $("swap-tip").textContent = data.swap.tip;
-  $("swap-savings").textContent =
-    `Saves ≈ ${data.swap.kg_saved} kg CO₂ and ₹${data.swap.money_inr}.`;
-  $("result").classList.remove("hidden");
-  $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  $("mode-hint").textContent = MODES[mode].hint;
 }
 
 // ---------------------------------------------------------------------------
-// Swap loop: commit to a Grove + Calendar reminder
+// Ask
 // ---------------------------------------------------------------------------
-function didIt() {
-  const grove = $("grove-code").value.trim();
-  if (!lastSwap) return;
-  if (!grove) { toast("Join a Grove first to bank your savings 🌳"); return; }
-  postJSON("/api/grove", {
-    grove, action: "log", member: localStorage.getItem("sprout:name") || "you",
-    kg_saved: lastSwap.kg_saved, money_inr: lastSwap.money_inr,
-  }).then(renderGrove).then(() => toast("Banked! Your Grove just grew 🌿")).catch((e) => toast(e.message));
-}
-
-function addReminder() {
-  if (!lastSwap) return;
-  // Google Calendar URL-spec — opens in the user's logged-in tab, no OAuth.
-  const text = encodeURIComponent("Sprout swap: " + lastSwap.tip);
-  const details = encodeURIComponent(`Saves ~${lastSwap.kg_saved} kg CO2 and ₹${lastSwap.money_inr}. — Sprout`);
-  const url =
-    "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-    `&text=${text}&details=${details}`;
-  window.open(url, "_blank", "noopener");
-}
-
-// ---------------------------------------------------------------------------
-// What-if simulator
-// ---------------------------------------------------------------------------
-async function runWhatif() {
-  const change = $("whatif-input").value.trim();
-  if (!change) { toast("Type a change to simulate"); return; }
-  $("whatif-go").disabled = true;
+async function ask() {
+  const input = $("ask-input").value.trim();
+  if (!input) { toast("Type or paste your question first 🙂"); return; }
+  $("ask").disabled = true;
+  const label = $("ask").innerHTML;
+  $("ask").textContent = "Thinking…";
   try {
-    const data = await postJSON("/api/whatif", { change });
-    const box = $("whatif-result");
-    box.classList.remove("hidden");
-    box.innerHTML =
-      `<p class="font-semibold">${change}</p>` +
-      `<p class="text-bark">Saves about <strong>${Math.round(data.annual_kg)} kg CO₂</strong>, ` +
-      `<strong>₹${Math.round(data.annual_money_inr)}</strong> and ${data.trees} trees' worth per year.</p>` +
-      (data.note ? `<p class="text-sm text-bark mt-1">${data.note}</p>` : "");
+    const env = await postJSON("/api/analyze", { mode: currentMode, input });
+    const badge = $("detected");
+    if (currentMode === "auto") {
+      badge.textContent = "Detected: " + (LABEL[env.mode] || env.mode);
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+    (RENDER[env.mode] || RENDER.lookup)(env.result);
+    $("result").classList.remove("hidden");
+    $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) {
     toast(e.message);
   } finally {
-    $("whatif-go").disabled = false;
+    $("ask").disabled = false;
+    $("ask").innerHTML = label;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Grove
+// Renderers (one per check)
 // ---------------------------------------------------------------------------
-async function joinGrove() {
-  const grove = $("grove-code").value.trim();
-  if (!grove) { toast("Enter a Grove code"); return; }
+function commitButton(label, kgYear, inrYear, text = "Commit ✅") {
+  return `<button class="commit-btn shrink-0 bg-leaf hover:bg-leafdark text-white font-semibold px-3 py-2 rounded-lg focus:ring-2 focus:ring-leaf"
+    data-label="${esc(label)}" data-kg="${kgYear}" data-inr="${inrYear}">${text}</button>`;
+}
+
+function wireCommits() {
+  document.querySelectorAll(".commit-btn").forEach((b) => {
+    b.onclick = () => {
+      commit(b.dataset.label, +b.dataset.kg, +b.dataset.inr);
+      b.textContent = "Banked 🌿"; b.disabled = true;
+    };
+  });
+}
+
+const RENDER = {
+  savings(d) {
+    const actions = [...d.actions].sort((a, b) => b.saves_inr_year - a.saves_inr_year);
+    const total = actions.reduce((s, a) => s + a.saves_inr_year, 0);
+    const cards = actions.map((a) => `
+      <li class="bg-white rounded-xl border border-black/5 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0"><p class="font-semibold">${esc(a.action)}</p>
+          <p class="text-sm text-bark">₹${a.saves_inr_year}/yr · ${a.saves_kg_year} kg/yr ·
+            <span style="color:${EFFORT_TINT[a.effort] || "#4a3f35"}">${esc(a.effort)}</span> · payback ${esc(a.payback)}</p></div>
+        ${commitButton(a.action, a.saves_kg_year, a.saves_inr_year)}
+      </li>`).join("");
+    $("result-body").innerHTML = `
+      <div class="bg-leaf/10 border border-leaf/30 rounded-2xl p-5">
+        <p class="text-xl font-bold text-leafdark">₹${total}/year in savings found</p>
+        <p class="text-bark">${esc(d.summary || "")}</p></div>
+      <ul class="grid gap-2">${cards}</ul>`;
+    wireCommits();
+  },
+
+  trip(d) {
+    const opts = [...d.options].sort((a, b) => a.kg - b.kg);
+    const rows = opts.map((o) => {
+      const best = o.mode === d.best;
+      return `<li class="bg-white rounded-xl border ${best ? "border-leaf" : "border-black/5"} p-4 flex flex-wrap justify-between gap-2">
+        <div><p class="font-semibold">${esc(o.mode)} ${best ? '<span class="text-leafdark text-xs">★ best</span>' : ""}</p>
+          <p class="text-sm text-bark">${esc(o.note || "")}</p></div>
+        <div class="text-sm text-right text-bark"><p><strong>${o.kg} kg</strong> CO₂</p><p>₹${o.cost_inr} · ${esc(o.time)}</p></div></li>`;
+    }).join("");
+    $("result-body").innerHTML = `
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <p class="text-lg font-bold">${esc(d.from)} → ${esc(d.to)} · ~${d.distance_km} km</p>
+        <p class="text-bark">Greenest practical option: <strong>${esc(d.best)}</strong></p></div>
+      <ul class="grid gap-2">${rows}</ul>`;
+  },
+
+  claim(d) {
+    const v = VERDICT[d.verdict] || VERDICT.mixed;
+    const reasons = (d.reasons || []).map((r) => `<li class="text-bark">• ${esc(r)}</li>`).join("");
+    $("result-body").innerHTML = `
+      <div class="bg-white rounded-2xl p-5 shadow-sm grid gap-2">
+        <span class="inline-block w-max px-3 py-1 rounded-full font-semibold" style="background:${v.color}22;color:${v.color}">${v.label}</span>
+        <p class="italic text-bark">"${esc(d.claim)}"</p>
+        <ul class="grid gap-1">${reasons}</ul>
+        ${d.tip ? `<p class="text-sm bg-cream rounded-lg p-3"><strong>What to look for:</strong> ${esc(d.tip)}</p>` : ""}</div>`;
+  },
+
+  shop(d) {
+    const items = (d.items || []).map((it) => `
+      <li class="bg-white rounded-xl border border-black/5 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0"><p class="font-semibold">${esc(it.item)} · ${it.kg} kg</p>
+          <p class="text-sm text-bark">Swap: ${esc(it.swap)} (saves ${it.saves_kg} kg)</p></div>
+        ${commitButton("Shop swap: " + it.swap, (it.saves_kg || 0) * 52, 0)}
+      </li>`).join("");
+    $("result-body").innerHTML = `
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <p class="text-xl font-bold">${d.total_kg} kg CO₂e in this order</p>
+        <p class="text-bark">${esc(d.summary || "")} You could cut <strong>${d.total_saves_kg} kg</strong> with the swaps below.</p></div>
+      <ul class="grid gap-2">${items}</ul>`;
+    wireCommits();
+  },
+
+  worth(d) {
+    const v = VERDICT[d.verdict] || VERDICT.borderline;
+    $("result-body").innerHTML = `
+      <div class="bg-white rounded-2xl p-5 shadow-sm grid gap-2">
+        <span class="inline-block w-max px-3 py-1 rounded-full font-semibold" style="background:${v.color}22;color:${v.color}">${v.label}</span>
+        <p class="text-lg font-bold">${esc(d.item)}</p>
+        <div class="grid grid-cols-3 gap-3 text-center my-1">
+          <div class="bg-cream rounded-xl p-3"><p class="text-xl font-bold text-leafdark">₹${d.upfront_inr}</p><p class="text-xs text-bark">upfront</p></div>
+          <div class="bg-cream rounded-xl p-3"><p class="text-xl font-bold text-leafdark">₹${d.saves_inr_year}</p><p class="text-xs text-bark">saved / year</p></div>
+          <div class="bg-cream rounded-xl p-3"><p class="text-xl font-bold text-leafdark">${d.payback_years} yr</p><p class="text-xs text-bark">payback</p></div></div>
+        <p class="text-bark">${esc(d.note || "")}</p>
+        <div>${commitButton(d.item, d.saves_kg_year, d.saves_inr_year, "Add to my plan ✅")}</div></div>`;
+    wireCommits();
+  },
+
+  lookup(d) {
+    $("result-body").innerHTML = `
+      <div class="bg-white rounded-2xl p-6 shadow-sm text-center grid gap-1">
+        <p class="text-bark">${esc(d.thing)}</p>
+        <p class="text-4xl font-bold text-leafdark">${d.kg} kg CO₂e <span class="text-base text-bark">${esc(d.unit || "")}</span></p>
+        <p class="text-lg">${esc(d.equivalent || "")}</p>
+        ${d.context ? `<p class="text-sm text-bark">${esc(d.context)}</p>` : ""}</div>`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Savings plan ledger
+// ---------------------------------------------------------------------------
+function planCode() { return $("plan-code").value.trim(); }
+
+function commit(label, kgYear, inrYear) {
+  const plan = planCode();
+  if (!plan) { toast("Open a plan first to bank your savings 🌳", [{ label: "OK", onClick: () => $("plan-code").focus() }]); return; }
+  postJSON("/api/plan", { plan, action: "commit", label, kg_year: kgYear, inr_year: inrYear })
+    .then(renderPlan).then(() => toast("Banked! Your plan just grew 🌿")).catch((e) => toast(e.message));
+}
+
+async function openPlan() {
+  const plan = planCode();
+  if (!plan) { toast("Enter a plan code"); return; }
   try {
-    renderGrove(await postJSON("/api/grove", { grove, action: "state" }));
-    localStorage.setItem("sprout:grove", grove);
+    renderPlan(await postJSON("/api/plan", { plan }));
+    localStorage.setItem("sprout:plan", plan);
   } catch (e) { toast(e.message); }
 }
 
-function renderGrove(state) {
-  $("grove-view").classList.remove("hidden");
-  $("grove-trees").textContent = state.trees;
-  $("grove-money").textContent = "₹" + Math.round(state.total_money_inr);
-  $("grove-swaps").textContent = state.swaps;
-  const trees = Math.max(state.members.length, Math.min(20, Math.round(state.trees)));
-  $("grove-forest").textContent = "🌳".repeat(Math.max(1, trees));
-  $("grove-goalbar").style.width = state.goal_pct + "%";
-  $("grove-goal").textContent =
-    `${state.total_kg} of ${state.goal_kg} kg saved · ${state.members.length} member(s) · ${state.goal_pct}% to weekly goal`;
+function renderPlan(s) {
+  $("plan-view").classList.remove("hidden");
+  $("plan-inr").textContent = "₹" + s.total_inr_year;
+  $("plan-kg").textContent = s.total_kg_year;
+  $("plan-trees").textContent = s.trees;
+  $("plan-actions").innerHTML = s.actions.map((a) => `<li class="bg-cream rounded-lg px-3 py-2">✅ ${esc(a)}</li>`).join("")
+    || '<li class="text-bark">No actions yet — commit one above.</li>';
 }
 
-function shareGrove() {
-  const grove = $("grove-code").value.trim() || "sprout-grove";
-  const link = `${location.origin}/?grove=${encodeURIComponent(grove)}`;
-  const text = encodeURIComponent(`Join my Sprout Grove and let's cut our carbon together 🌳 ${link}`);
-  // WhatsApp URL-spec — no auth.
-  window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
+function planReminder() {
+  const text = encodeURIComponent("Sprout: start my savings actions");
+  const details = encodeURIComponent(`On track to save ${$("plan-inr").textContent}/yr and ${$("plan-kg").textContent} kg CO₂. — Sprout`);
+  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${details}`, "_blank", "noopener");
 }
 
-function emailDigest() {
-  const grove = $("grove-code").value.trim() || "your Grove";
-  const trees = $("grove-trees").textContent;
-  const money = $("grove-money").textContent;
-  // Gmail compose URL-spec — opens prefilled in the user's logged-in tab, no OAuth.
-  const su = encodeURIComponent(`🌳 ${grove} saved ${money} this week`);
-  const body = encodeURIComponent(
-    `This week your Sprout Grove "${grove}" grew to ${trees} trees' worth and saved ${money}.\n\n` +
-    `Keep the streak going — your next swap is waiting in Sprout.`);
+function planEmail() {
+  const su = encodeURIComponent(`My Sprout plan: ${$("plan-inr").textContent}/yr in savings`);
+  const items = [...document.querySelectorAll("#plan-actions li")].map((li) => li.textContent).join("\n");
+  const body = encodeURIComponent(`My savings plan (${planCode() || "plan"}):\n\n${items}\n\nOn track: ${$("plan-inr").textContent}/yr, ${$("plan-kg").textContent} kg CO₂/yr.`);
   window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${su}&body=${body}`, "_blank", "noopener");
 }
 
-// ---------------------------------------------------------------------------
-// Persistence (restore last session)
-// ---------------------------------------------------------------------------
-function persist(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: state, savedAt: Date.now() }));
-}
-
-function maybeRestore() {
-  const blob = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-  if (!blob) return;
-  if (Date.now() - blob.savedAt > 7 * 864e5) return;
-  toast("Restore your last session?", [
-    { label: "Restore", onClick: () => { $("activity").value = blob.data.activity; renderResult(blob.data.result); } },
-    { label: "Dismiss", onClick: () => localStorage.removeItem(STORAGE_KEY) },
-  ], true);
+function planShare() {
+  const plan = planCode() || "sprout-plan";
+  const link = `${location.origin}/?plan=${encodeURIComponent(plan)}`;
+  const text = encodeURIComponent(`Join my Sprout savings plan — let's cut bills + carbon together 🌳 ${link}`);
+  window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
 }
 
 // ---------------------------------------------------------------------------
 // Wire up
 // ---------------------------------------------------------------------------
 function init() {
-  $("analyze").onclick = analyze;
-  $("load-sample").onclick = () => { $("activity").value = SAMPLE; $("activity").focus(); };
-  $("did-it").onclick = didIt;
-  $("remind").onclick = addReminder;
-  $("whatif-go").onclick = runWhatif;
-  $("grove-join").onclick = joinGrove;
-  $("grove-share").onclick = shareGrove;
-  $("grove-email").onclick = emailDigest;
+  document.querySelectorAll(".mode-tab").forEach((t) => { t.onclick = () => setMode(t.dataset.mode); });
+  $("ask").onclick = ask;
+  $("load-sample").onclick = () => { $("ask-input").value = MODES[currentMode].sample; $("ask-input").focus(); };
+  $("plan-open").onclick = openPlan;
+  $("plan-remind").onclick = planReminder;
+  $("plan-email").onclick = planEmail;
+  $("plan-share").onclick = planShare;
 
-  document.querySelectorAll(".whatif-preset").forEach((b) => {
-    b.onclick = () => { $("whatif-input").value = b.textContent.trim(); runWhatif(); };
+  $("ask-input").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") ask();
   });
 
-  // ⌘/Ctrl+Enter analyses from the textarea.
-  $("activity").addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") analyze();
-  });
-
-  // Deep link: /?grove=code prefills + joins.
   const params = new URLSearchParams(location.search);
-  const g = params.get("grove") || localStorage.getItem("sprout:grove");
-  if (g) { $("grove-code").value = g; joinGrove(); }
+  const p = params.get("plan") || localStorage.getItem("sprout:plan");
+  if (p) { $("plan-code").value = p; openPlan(); }
 
-  maybeRestore();
+  setMode("auto");
 }
 
 if (typeof document !== "undefined") {

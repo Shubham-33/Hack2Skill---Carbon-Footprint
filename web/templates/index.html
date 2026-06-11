@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Sprout — describe your day, see your carbon footprint, and grow a greener habit that saves you money." />
-  <title>Sprout — grow a greener habit</title>
+  <meta name="description" content="Sprout — a practical carbon + money assistant. Find real savings, plan greener trips, and catch greenwashing." />
+  <title>Sprout — find the money hiding in your carbon</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -22,140 +22,90 @@
   <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-ink focus:text-cream focus:px-4 focus:py-2 focus:rounded">Skip to content</a>
 
   <header class="border-b border-black/5">
-    <nav class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between" aria-label="Primary">
+    <nav class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between" aria-label="Primary">
       <div class="flex items-center gap-2">
         <span aria-hidden="true" class="text-2xl">🌱</span>
-        <span class="font-700 text-lg font-semibold">Sprout</span>
+        <span class="font-semibold text-lg">Sprout</span>
       </div>
-      <span class="text-sm text-bark">Grow a greener habit — together</span>
+      <span class="text-sm text-bark">Find the money hiding in your carbon</span>
     </nav>
   </header>
 
-  <main id="main" class="max-w-5xl mx-auto px-4 py-8 grid gap-8">
+  <main id="main" class="max-w-4xl mx-auto px-4 py-8 grid gap-8">
 
-    <!-- ============ Log your day ============ -->
-    <section aria-labelledby="log-h" class="grid gap-4">
-      <h1 id="log-h" class="text-2xl sm:text-3xl font-bold leading-tight">
-        Describe your day. See your footprint. Shrink it.
-      </h1>
-      <p class="text-bark max-w-2xl">
-        One sentence is enough — Sprout itemises the carbon, compares it to a sustainable
-        daily target, and gives you <strong>one money-saving swap</strong>.
-      </p>
-      <label for="activity" class="sr-only">Describe your day's activities</label>
-      <textarea id="activity" rows="3"
-        class="w-full rounded-xl border border-black/10 p-4 text-base focus:ring-2 focus:ring-leaf focus:outline-none"
-        placeholder="e.g. Drove 20 km to work, had a beef burger for lunch, ran the AC for 3 hours"></textarea>
+    <!-- ============ Ask ============ -->
+    <section aria-labelledby="ask-h" class="grid gap-4">
+      <h1 id="ask-h" class="text-2xl sm:text-3xl font-bold leading-tight">A second opinion before you decide.</h1>
+      <p class="text-bark max-w-2xl">Paste a bill, a trip, a product, an eco-claim, an order, or ask "is solar worth it?" — Sprout figures out what you need and answers with real ₹ and carbon.</p>
+
+      <div role="tablist" aria-label="Pick a check, or let Sprout auto-detect" class="flex flex-wrap gap-2">
+        <button role="tab" id="tab-auto" aria-selected="true" data-mode="auto"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">✨ Auto</button>
+        <button role="tab" data-mode="savings" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">💰 Savings</button>
+        <button role="tab" data-mode="trip" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">🚆 Trip</button>
+        <button role="tab" data-mode="shop" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">🛒 Shop</button>
+        <button role="tab" data-mode="worth" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">⚖️ Worth it?</button>
+        <button role="tab" data-mode="claim" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">🔍 Eco-claim</button>
+        <button role="tab" data-mode="lookup" aria-selected="false"
+          class="mode-tab px-3 py-2 rounded-xl border font-semibold focus:ring-2 focus:ring-leaf">📊 Footprint</button>
+      </div>
+
+      <p id="mode-hint" class="text-bark"></p>
+      <label for="ask-input" class="sr-only">Your question</label>
+      <textarea id="ask-input" rows="3"
+        class="w-full rounded-xl border border-black/10 p-4 text-base focus:ring-2 focus:ring-leaf focus:outline-none"></textarea>
       <div class="flex flex-wrap gap-3">
-        <button id="analyze" type="button"
+        <button id="ask" type="button"
           class="bg-leaf hover:bg-leafdark text-white font-semibold px-5 py-3 rounded-xl focus:ring-2 focus:ring-offset-2 focus:ring-leaf">
-          Analyse my day
-          <span class="text-white/70 text-xs ml-1">⌘↵</span>
+          Ask Sprout <span class="text-white/70 text-xs ml-1">⌘↵</span>
         </button>
         <button id="load-sample" type="button"
-          class="border border-black/15 hover:bg-black/5 px-5 py-3 rounded-xl focus:ring-2 focus:ring-leaf">
-          Load sample day
-        </button>
+          class="border border-black/15 hover:bg-black/5 px-5 py-3 rounded-xl focus:ring-2 focus:ring-leaf">Load example</button>
       </div>
     </section>
 
     <!-- ============ Result ============ -->
-    <section id="result" aria-labelledby="result-h" class="hidden grid gap-6" role="status" aria-live="polite">
-      <h2 id="result-h" class="sr-only">Your footprint result</h2>
-
-      <div class="grid sm:grid-cols-[auto,1fr] gap-6 items-center bg-white rounded-2xl p-6 shadow-sm">
-        <!-- Sprout that grows with how green your day is -->
-        <div class="flex flex-col items-center">
-          <div id="sprout" class="text-6xl transition-transform" aria-hidden="true">🌱</div>
-          <span id="gauge-pill" class="mt-2 text-xs font-semibold px-2 py-1 rounded-full"></span>
-        </div>
-        <div>
-          <p id="summary" class="text-xl font-semibold"></p>
-          <p id="equivalence" class="text-bark"></p>
-          <div class="mt-3 h-3 rounded-full bg-black/10 overflow-hidden" role="img" aria-label="Footprint versus sustainable daily target">
-            <div id="gauge-bar" class="h-full rounded-full transition-all duration-500" style="width:0%"></div>
-          </div>
-          <p id="gauge-label" class="text-sm text-bark mt-1"></p>
-        </div>
-      </div>
-
-      <div>
-        <h3 class="font-semibold mb-2">Where it came from</h3>
-        <ul id="items" class="grid sm:grid-cols-2 gap-2"></ul>
-      </div>
-
-      <!-- The one personalised swap -->
-      <article class="bg-leaf/10 border border-leaf/30 rounded-2xl p-6" aria-labelledby="swap-h">
-        <h3 id="swap-h" class="font-semibold text-leafdark mb-1">Your swap for tomorrow</h3>
-        <p id="swap-tip" class="text-lg"></p>
-        <p id="swap-savings" class="text-bark mt-1"></p>
-        <div class="flex flex-wrap gap-3 mt-4">
-          <button id="did-it" type="button"
-            class="bg-leaf hover:bg-leafdark text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-leaf">
-            Did it ✅
-          </button>
-          <button id="remind" type="button"
-            class="border border-leaf/40 hover:bg-leaf/10 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">
-            Add reminder 📅
-          </button>
-        </div>
-      </article>
+    <section id="result" class="hidden" role="status" aria-live="polite" aria-labelledby="result-h">
+      <h2 id="result-h" class="sr-only">Result</h2>
+      <p id="detected" class="hidden text-sm text-bark mb-2"></p>
+      <div id="result-body" class="grid gap-4"></div>
     </section>
 
-    <!-- ============ What-if simulator ============ -->
-    <section aria-labelledby="whatif-h" class="bg-white rounded-2xl p-6 shadow-sm grid gap-3">
-      <h2 id="whatif-h" class="text-xl font-bold">What if… ?</h2>
-      <p class="text-bark">See the yearly payoff of a bigger change.</p>
-      <div class="flex flex-wrap gap-2" id="whatif-presets">
-        <button type="button" class="whatif-preset border border-black/15 hover:bg-black/5 px-3 py-2 rounded-lg text-sm">Bike to work 2×/week</button>
-        <button type="button" class="whatif-preset border border-black/15 hover:bg-black/5 px-3 py-2 rounded-lg text-sm">Go meat-free on weekdays</button>
-        <button type="button" class="whatif-preset border border-black/15 hover:bg-black/5 px-3 py-2 rounded-lg text-sm">Switch to a heat pump</button>
-      </div>
-      <label for="whatif-input" class="sr-only">Describe a change</label>
+    <!-- ============ Savings plan tracker ============ -->
+    <section aria-labelledby="plan-h" class="bg-white rounded-2xl p-6 shadow-sm grid gap-3">
+      <h2 id="plan-h" class="text-xl font-bold">Your savings plan 🌳</h2>
+      <p class="text-bark">Commit to an action and Sprout banks it here — your ₹/year on track to save keeps growing. Share a plan code with family to pool it.</p>
       <div class="flex gap-2">
-        <input id="whatif-input" type="text"
+        <label for="plan-code" class="sr-only">Plan code</label>
+        <input id="plan-code" type="text"
           class="flex-1 rounded-lg border border-black/10 p-3 focus:ring-2 focus:ring-leaf focus:outline-none"
-          placeholder="Type a change, e.g. take the train instead of flying domestic" />
-        <button id="whatif-go" type="button"
-          class="bg-bark hover:bg-ink text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Project</button>
+          placeholder="Plan code, e.g. home-2026" />
+        <button id="plan-open" type="button"
+          class="bg-leaf hover:bg-leafdark text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-leaf">Open</button>
       </div>
-      <div id="whatif-result" class="hidden bg-cream rounded-xl p-4" role="status" aria-live="polite"></div>
-    </section>
-
-    <!-- ============ Grove ============ -->
-    <section aria-labelledby="grove-h" class="bg-white rounded-2xl p-6 shadow-sm grid gap-3">
-      <h2 id="grove-h" class="text-xl font-bold">Your Grove 🌳</h2>
-      <p class="text-bark">Grow a shared forest with family or your team. Same code = same Grove. No login.</p>
-      <div class="flex gap-2">
-        <label for="grove-code" class="sr-only">Grove code</label>
-        <input id="grove-code" type="text"
-          class="flex-1 rounded-lg border border-black/10 p-3 focus:ring-2 focus:ring-leaf focus:outline-none"
-          placeholder="Grove code, e.g. sprout-otter-42" />
-        <button id="grove-join" type="button"
-          class="bg-leaf hover:bg-leafdark text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-leaf">Join</button>
-      </div>
-      <div id="grove-view" class="hidden grid gap-3" aria-live="polite">
+      <div id="plan-view" class="hidden grid gap-3" aria-live="polite">
         <div class="grid grid-cols-3 gap-3 text-center">
-          <div class="bg-cream rounded-xl p-3"><p id="grove-trees" class="text-2xl font-bold text-leafdark">0</p><p class="text-xs text-bark">trees' worth</p></div>
-          <div class="bg-cream rounded-xl p-3"><p id="grove-money" class="text-2xl font-bold text-leafdark">₹0</p><p class="text-xs text-bark">saved together</p></div>
-          <div class="bg-cream rounded-xl p-3"><p id="grove-swaps" class="text-2xl font-bold text-leafdark">0</p><p class="text-xs text-bark">swaps done</p></div>
+          <div class="bg-cream rounded-xl p-3"><p id="plan-inr" class="text-2xl font-bold text-leafdark">₹0</p><p class="text-xs text-bark">saving / year</p></div>
+          <div class="bg-cream rounded-xl p-3"><p id="plan-kg" class="text-2xl font-bold text-leafdark">0</p><p class="text-xs text-bark">kg CO₂ / year</p></div>
+          <div class="bg-cream rounded-xl p-3"><p id="plan-trees" class="text-2xl font-bold text-leafdark">0</p><p class="text-xs text-bark">trees' worth</p></div>
         </div>
-        <div id="grove-forest" class="text-3xl tracking-widest" aria-hidden="true"></div>
-        <div class="h-3 rounded-full bg-black/10 overflow-hidden" role="img" aria-label="Grove goal progress">
-          <div id="grove-goalbar" class="h-full bg-leaf rounded-full transition-all duration-500" style="width:0%"></div>
-        </div>
-        <p id="grove-goal" class="text-sm text-bark"></p>
+        <ul id="plan-actions" class="grid gap-1 text-sm"></ul>
         <div class="flex flex-wrap gap-3">
-          <button id="grove-share" type="button" class="border border-black/15 hover:bg-black/5 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Share Grove 🔗</button>
-          <button id="grove-email" type="button" class="border border-black/15 hover:bg-black/5 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Email weekly digest ✉️</button>
+          <button id="plan-remind" type="button" class="border border-black/15 hover:bg-black/5 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Add to Calendar 📅</button>
+          <button id="plan-email" type="button" class="border border-black/15 hover:bg-black/5 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Email my plan ✉️</button>
+          <button id="plan-share" type="button" class="border border-black/15 hover:bg-black/5 px-4 py-2 rounded-lg focus:ring-2 focus:ring-leaf">Share plan 🔗</button>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="max-w-5xl mx-auto px-4 py-8 text-sm text-bark">
-    <p>Sprout · built for PromptWars · LLM by NVIDIA NIM · Sheets/Gmail/Calendar via Google.
-       Estimates are demo-grade public averages.</p>
+  <footer class="max-w-4xl mx-auto px-4 py-8 text-sm text-bark">
+    <p>Sprout · built for PromptWars · LLM by NVIDIA NIM · Sheets/Gmail/Calendar via Google. Estimates are demo-grade public averages.</p>
   </footer>
 
   <div id="toast-root" class="fixed bottom-6 right-6 grid gap-2 z-50" aria-live="polite"></div>

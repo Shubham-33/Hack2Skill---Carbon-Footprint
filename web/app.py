@@ -1,16 +1,23 @@
-"""Sprout — a daily climate-habit coach.
+"""Sprout — your carbon + money second opinion.
 
-Describe your day in one sentence; Sprout itemises your carbon footprint, shows
-relatable equivalences and a gauge against a sustainable daily target, then gives
-ONE personalised, money-saving swap. A shared "Grove" (Google Sheet) tracks the
-streak and compounding savings so people come back.
+Ask anything in one box; a single NVIDIA call classifies it and answers with specific,
+money-grounded output. Six checks:
 
-LLM: NVIDIA NIM (OpenAI-compatible REST). Google services: Sheets (ledger),
-Gmail + Calendar (client-side URL-spec dispatch — no OAuth).
+  • savings  — a bill / monthly spend → ranked actions with ₹ + kg saved/yr + payback
+  • trip     — a journey → travel options ranked by carbon, cost and time
+  • claim    — an "eco-friendly" marketing claim → legit / greenwashing verdict + why
+  • shop     — an order / receipt / cart → footprint + cheaper-greener swaps
+  • worth    — "is solar / an EV / a heat pump worth it?" → personalised payback
+  • lookup   — "what's the footprint of X?" → a number + a relatable comparison
 
-The app NEVER hard-depends on the network: if the NVIDIA call or the Sheet is
-unavailable, deterministic fallbacks keep every endpoint working (good for a
-cold-click demo and for tests).
+Commit a money-saving action and it's banked in a shared plan (Google Sheet), so the
+"₹/year you're on track to save" compounds — that's the reason to come back.
+
+LLM: NVIDIA NIM (OpenAI-compatible REST). Google services: Sheets (ledger), plus
+Gmail + Calendar via client-side URL-spec (no OAuth).
+
+Every path has a deterministic offline fallback, so a network/LLM hiccup never breaks
+the demo (and tests run without a key).
 """
 from __future__ import annotations
 
@@ -24,7 +31,7 @@ from typing import Any, Final
 import requests
 from flask import Flask, Response, jsonify, make_response, render_template, request
 
-try:  # python-dotenv is dev-only convenience; absent in prod image is fine
+try:  # python-dotenv is a dev convenience; its absence in prod is fine
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -36,44 +43,20 @@ except ImportError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 NVIDIA_API_KEY: Final[str] = os.environ.get("NVIDIA_API_KEY", "")
-NVIDIA_MODEL: Final[str] = os.environ.get("NVIDIA_MODEL", "meta/llama-3.1-70b-instruct")
+NVIDIA_MODEL: Final[str] = os.environ.get("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
 NVIDIA_URL: Final[str] = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 SHEET_ID: Final[str] = os.environ.get("SPROUT_SHEET_ID", "")
 MAX_INPUT_CHARS: Final[int] = int(os.environ.get("MAX_INPUT_CHARS", "600"))
 
-# Sustainable per-person daily budget (~6 kg/day ≈ 2.0 t/yr, the 1.5°C target).
-DAILY_TARGET_KG: Final[float] = 6.0
-
-# kg CO2e per unit — rough public averages for the offline fallback estimator.
-EMISSION_FACTORS: Final[dict[str, tuple[float, str, str]]] = {
-    # keyword: (kg per unit, unit-regex group meaning, category)
-    "car": (0.17, "km", "transport"),
-    "drove": (0.17, "km", "transport"),
-    "drive": (0.17, "km", "transport"),
-    "uber": (0.17, "km", "transport"),
-    "taxi": (0.17, "km", "transport"),
-    "bus": (0.10, "km", "transport"),
-    "train": (0.04, "km", "transport"),
-    "flight": (0.16, "km", "transport"),
-    "flew": (0.16, "km", "transport"),
-    "beef": (6.0, "meal", "food"),
-    "burger": (5.0, "meal", "food"),
-    "steak": (6.5, "meal", "food"),
-    "lamb": (5.8, "meal", "food"),
-    "chicken": (1.8, "meal", "food"),
-    "ac": (0.6, "hour", "energy"),
-    "heater": (0.7, "hour", "energy"),
-    "electricity": (0.42, "kwh", "energy"),
-}
-
-# Per-category swap templates for the offline fallback: (tip, kg_saved, money_inr).
-SWAP_TEMPLATES: Final[dict[str, tuple[str, float, int]]] = {
-    "transport": ("Take the metro or carpool for one trip tomorrow", 3.2, 120),
-    "food": ("Swap one beef meal for chicken or veg this week", 4.8, 90),
-    "energy": ("Set the AC 2°C higher for 3 hours", 1.4, 60),
-    "general": ("Pick one short car trip to replace with a walk or cycle", 2.0, 80),
-}
+# kg CO2e per km — public averages, used by the offline trip fallback.
+TRIP_FACTORS: Final[list[tuple[str, float, float, str]]] = [
+    # (mode, kg/km, ₹/km, note)
+    ("Cycle", 0.0, 0.0, "Zero emissions, free, good for short hops"),
+    ("Train", 0.04, 1.2, "Low carbon and usually cheapest for distance"),
+    ("Bus", 0.10, 1.5, "Low carbon, flexible routes"),
+    ("Car", 0.17, 8.0, "Convenient but the priciest per km"),
+]
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24  # cache static assets 1 day
@@ -81,7 +64,7 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24  # cache static assets 1 
 # Cache-busts /static on every deploy (file mtime → new ?v= → browser refetches).
 BUILD_ID: Final[str] = str(int(Path(__file__).stat().st_mtime))
 
-# In-process Grove store, used when no Google Sheet is configured.
+# In-process savings ledger, used when no Google Sheet is configured.
 _MEMORY_LEDGER: dict[str, list[dict[str, Any]]] = {}
 
 
@@ -94,27 +77,6 @@ def inject_build_id() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
-
-def gauge_status(total_kg: float) -> dict[str, Any]:
-    """Classify a daily total against the sustainable target."""
-    ratio = total_kg / DAILY_TARGET_KG
-    if ratio <= 0.75:
-        level, label = "green", "Under your climate budget — nice."
-    elif ratio <= 1.25:
-        level, label = "amber", "Around the sustainable daily target."
-    else:
-        level, label = "red", "Over budget — one swap goes a long way."
-    return {"level": level, "label": label, "ratio": round(ratio, 2), "target_kg": DAILY_TARGET_KG}
-
-
-def equivalence(total_kg: float) -> str:
-    """Translate kg CO2e into a relatable, human-scale comparison."""
-    km = total_kg / 0.17
-    charges = total_kg / 0.005
-    if km >= 1:
-        return f"≈ {km:.0f} km driven in a petrol car"
-    return f"≈ {charges:.0f} smartphone charges"
-
 
 def _extract_json(text: str) -> Any:
     """Parse JSON from an LLM reply, tolerating ```json fences and stray prose."""
@@ -129,48 +91,134 @@ def _extract_json(text: str) -> Any:
     return json.loads(cleaned[start : end + 1])
 
 
-def offline_estimate(text: str) -> dict[str, Any]:
-    """Deterministic footprint estimate used when the LLM is unavailable."""
-    lowered = text.lower()
-    by_category: dict[str, dict[str, Any]] = {}
-    for keyword, (factor, unit, category) in EMISSION_FACTORS.items():
-        if not re.search(rf"\b{re.escape(keyword)}\b", lowered):
-            continue
-        # Meals are counted once per mention; distances/energy read an adjacent number.
-        amount = 1.0 if unit == "meal" else _first_number_near(lowered, keyword)
-        kg = round(factor * amount, 2)
-        candidate = {"label": keyword, "category": category, "amount": amount, "unit": unit, "kg": kg}
-        # Keep only the biggest contributor per category (avoids beef+burger double counting).
-        if category not in by_category or kg > by_category[category]["kg"]:
-            by_category[category] = candidate
-    items = list(by_category.values())
-    # Nothing recognised → assume an average day so the UI still shows something.
-    if not items:
-        items.append(
-            {"label": "daily activity", "category": "general", "amount": 1, "unit": "day", "kg": 5.0}
-        )
-    total = round(sum(i["kg"] for i in items), 2)
-    top_category = max(items, key=lambda i: i["kg"])["category"]
-    tip, kg_saved, money = SWAP_TEMPLATES.get(top_category, SWAP_TEMPLATES["general"])
-    return {
-        "items": items,
-        "total_kg": total,
-        "swap": {"tip": tip, "kg_saved": kg_saved, "money_inr": money, "category": top_category},
-        "summary": f"Your day adds up to about {total} kg CO₂e.",
-        "source": "offline",
-    }
+def _find_money(text: str) -> float:
+    """Pull the first rupee-ish amount from text (e.g. '₹3200', 'rs 3,200'); else 0."""
+    match = re.search(r"(?:₹|rs\.?\s*)?(\d[\d,]*)", text.lower())
+    if not match:
+        return 0.0
+    return float(match.group(1).replace(",", ""))
 
 
-def _first_number_near(text: str, keyword: str) -> float:
-    """Find a number adjacent to a keyword (e.g. '20 km' near 'drove'); default 1."""
-    idx = text.find(keyword)
-    window = text[max(0, idx - 15) : idx + 15]
-    match = re.search(r"(\d+(?:\.\d+)?)", window)
-    return float(match.group(1)) if match else 1.0
+def _first_number(text: str) -> float | None:
+    """First standalone number in text, or None."""
+    match = re.search(r"(\d+(?:\.\d+)?)", text)
+    return float(match.group(1)) if match else None
 
 
 # ---------------------------------------------------------------------------
-# NVIDIA NIM (OpenAI-compatible) — one call per user action
+# Offline fallbacks (deterministic; safety net + test path)
+# ---------------------------------------------------------------------------
+
+def offline_savings(text: str) -> dict[str, Any]:
+    """Generic-but-structured savings list when the LLM is unavailable."""
+    actions = [
+        {"action": "Set AC to 24°C instead of 18°C", "saves_inr_year": 3600,
+         "saves_kg_year": 210, "effort": "easy", "payback": "immediate"},
+        {"action": "Switch your 5 most-used bulbs to LED", "saves_inr_year": 900,
+         "saves_kg_year": 60, "effort": "easy", "payback": "~2 months"},
+        {"action": "Add a smart power strip to cut standby draw", "saves_inr_year": 1200,
+         "saves_kg_year": 80, "effort": "medium", "payback": "~3 months"},
+    ]
+    return {
+        "summary": f"Spotted ₹{sum(a['saves_inr_year'] for a in actions)}/yr in easy savings.",
+        "monthly_spend_inr": _find_money(text),
+        "annual_kg": sum(a["saves_kg_year"] for a in actions),
+        "actions": actions,
+    }
+
+
+def offline_trip(text: str) -> dict[str, Any]:
+    """Estimate travel options for a trip using built-in per-km factors."""
+    dist = _first_number(text) or 10.0
+    options = [
+        {
+            "mode": mode,
+            "kg": round(kg * dist, 1),
+            "cost_inr": round(cost * dist),
+            "time": f"~{round(dist / 20, 1)} h" if mode != "Cycle" else f"~{round(dist / 12, 1)} h",
+            "note": note,
+        }
+        for mode, kg, cost, note in TRIP_FACTORS
+    ]
+    best = min(options, key=lambda o: (o["kg"], o["cost_inr"]))["mode"]
+    return {"from": "Start", "to": "Destination", "distance_km": dist, "options": options, "best": best}
+
+
+def offline_claim(text: str) -> dict[str, Any]:
+    """Cautious default verdict when the LLM is unavailable."""
+    return {
+        "claim": text[:120],
+        "verdict": "mixed",
+        "confidence": 0.5,
+        "reasons": [
+            "The claim lacks a named third-party certification.",
+            "No lifecycle data is given to back it up.",
+        ],
+        "tip": "Look for a specific certification (Energy Star, FSC, etc.) and real numbers.",
+    }
+
+
+def offline_shop(text: str) -> dict[str, Any]:
+    """Generic order breakdown with greener swaps when the LLM is unavailable."""
+    items = [
+        {"item": "Highest-impact item in your order", "kg": 3.2,
+         "swap": "Pick a local or less-packaged alternative", "saves_kg": 1.1},
+        {"item": "A packaged / imported item", "kg": 1.5,
+         "swap": "Buy in bulk to cut packaging", "saves_kg": 0.4},
+    ]
+    return {
+        "summary": f"About {round(sum(i['kg'] for i in items), 1)} kg CO₂e in this order.",
+        "total_kg": round(sum(i["kg"] for i in items), 1),
+        "items": items,
+        "total_saves_kg": round(sum(i["saves_kg"] for i in items), 1),
+    }
+
+
+def offline_worth(text: str) -> dict[str, Any]:
+    """Generic payback estimate when the LLM is unavailable."""
+    return {
+        "item": "This upgrade",
+        "upfront_inr": 120000,
+        "saves_inr_year": 24000,
+        "saves_kg_year": 1500,
+        "payback_years": 5.0,
+        "verdict": "borderline",
+        "note": "Worth it if you'll keep it 5+ years; check for local subsidies that shorten payback.",
+    }
+
+
+def offline_lookup(text: str) -> dict[str, Any]:
+    """Rough footprint figure when the LLM is unavailable."""
+    return {
+        "thing": text[:60],
+        "kg": 5.0,
+        "unit": "per item",
+        "equivalent": "≈ 29 km driven in a petrol car",
+        "context": "A rough average — give a specific quantity for a sharper number.",
+    }
+
+
+# Ordered keyword routing for the offline path (the LLM classifies when available).
+_CLASSIFY_RULES: Final[list[tuple[str, tuple[str, ...]]]] = [
+    ("worth", ("worth", "solar", " ev", "electric vehicle", "heat pump", "induction")),
+    ("shop", ("receipt", "order", "cart", "grocery", "bought")),
+    ("claim", ("greenwash", "eco-friendly", "sustainable", "carbon neutral", "claim")),
+    ("savings", ("bill", "electricity", "spend", "saving")),
+    ("trip", (" to ", "travel", "commute", "flight", "train", "drive")),
+]
+
+
+def classify_offline(text: str) -> str:
+    """Pick a mode from keywords when the LLM can't classify; default to lookup."""
+    lowered = text.lower()
+    for mode, keywords in _CLASSIFY_RULES:
+        if any(k in lowered for k in keywords):
+            return mode
+    return "lookup"
+
+
+# ---------------------------------------------------------------------------
+# NVIDIA NIM (OpenAI-compatible) — one call per question
 # ---------------------------------------------------------------------------
 
 def nvidia_chat(system: str, user: str) -> str:
@@ -181,8 +229,8 @@ def nvidia_chat(system: str, user: str) -> str:
         json={
             "model": NVIDIA_MODEL,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "temperature": 0.3,
-            "max_tokens": 700,
+            "temperature": 0.2,
+            "max_tokens": 900,
         },
         timeout=30,
     )
@@ -190,64 +238,68 @@ def nvidia_chat(system: str, user: str) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-_ANALYZE_SYSTEM: Final[str] = (
-    "You are a carbon-footprint estimator. Given a person's plain-English description "
-    "of their day, return ONLY JSON with this shape: "
-    '{"items":[{"label":str,"category":"transport|food|energy|other","amount":number,'
-    '"unit":str,"kg":number}],"total_kg":number,'
-    '"swap":{"tip":str,"kg_saved":number,"money_inr":number,"category":str},'
-    '"summary":str}. The swap must target the largest emission source, be specific and '
-    "doable, and include realistic INR money saved. Use kg CO2e."
+# mode → (required result key, offline fallback). The LLM (or classify_offline) picks
+# the mode; the required key validates the LLM returned the right shape.
+MODE_CONFIG: Final[dict[str, dict[str, Any]]] = {
+    "savings": {"required": "actions", "offline": offline_savings},
+    "trip": {"required": "options", "offline": offline_trip},
+    "claim": {"required": "verdict", "offline": offline_claim},
+    "shop": {"required": "items", "offline": offline_shop},
+    "worth": {"required": "payback_years", "offline": offline_worth},
+    "lookup": {"required": "kg", "offline": offline_lookup},
+}
+
+UNIFIED_SYSTEM: Final[str] = (
+    "You are Sprout, a carbon + money assistant. Classify the user's question into exactly "
+    "ONE mode and answer it. Return ONLY JSON: {\"mode\": one of "
+    "[savings,trip,claim,shop,worth,lookup], \"result\": {...}} where result matches the "
+    "chosen mode's schema:\n"
+    "- savings (lower a bill/spending): {summary, monthly_spend_inr, annual_kg, "
+    "actions:[{action, saves_inr_year, saves_kg_year, effort:easy|medium|hard, payback}]} "
+    "— 3-5 specific actions ranked by money saved.\n"
+    "- trip (how to travel A→B): {from, to, distance_km, "
+    "options:[{mode, kg, cost_inr, time, note}], best}.\n"
+    "- claim (is an eco-claim real): {claim, verdict:legit|mixed|greenwashing, confidence, "
+    "reasons:[...], tip}.\n"
+    "- shop (footprint of an order/receipt/cart): {summary, total_kg, "
+    "items:[{item, kg, swap, saves_kg}], total_saves_kg}.\n"
+    "- worth (is solar/EV/heat pump/etc worth it): {item, upfront_inr, saves_inr_year, "
+    "saves_kg_year, payback_years, verdict:'worth it'|borderline|'not yet', note}.\n"
+    "- lookup (quick footprint of X): {thing, kg, unit, equivalent, context}.\n"
+    "If the user gives a Preferred mode, use it. Money in INR. Be specific and realistic; "
+    "never give vague advice."
 )
 
 
-def analyze_day(text: str) -> dict[str, Any]:
-    """LLM footprint analysis with a deterministic offline fallback."""
+def _route_offline(text: str, hint: str | None) -> dict[str, Any]:
+    """Build an offline envelope, honouring an explicit hint or classifying by keyword."""
+    mode = hint if hint in MODE_CONFIG else classify_offline(text)
+    return {"mode": mode, "result": MODE_CONFIG[mode]["offline"](text), "source": "offline"}
+
+
+def analyze(text: str, hint: str | None = None) -> dict[str, Any]:
+    """Classify + answer via one NVIDIA call, falling back to deterministic offline output.
+
+    Returns an envelope: {"mode": str, "result": {...}, "source": "nvidia"|"offline"}.
+    """
     if not NVIDIA_API_KEY:
-        return offline_estimate(text)
+        return _route_offline(text, hint)
+    user = f"Preferred mode: {hint}\n\n{text}" if hint else text
     try:
-        raw = nvidia_chat(_ANALYZE_SYSTEM, text)
-        data = _extract_json(raw)
-        # Minimal shape validation; KeyError/TypeError falls through to offline.
-        _ = data["items"], data["total_kg"], data["swap"]["tip"]
-        data["source"] = "nvidia"
-        return data
+        data = _extract_json(nvidia_chat(UNIFIED_SYSTEM, user))
+        mode = data["mode"]
+        if mode not in MODE_CONFIG:
+            raise ValueError(f"bad mode: {mode}")
+        result = data["result"]
+        if MODE_CONFIG[mode]["required"] not in result:
+            raise KeyError(MODE_CONFIG[mode]["required"])
+        return {"mode": mode, "result": result, "source": "nvidia"}
     except (requests.RequestException, ValueError, KeyError, TypeError):
-        return offline_estimate(text)
-
-
-_WHATIF_SYSTEM: Final[str] = (
-    "You estimate the ANNUAL impact of a lifestyle change. Return ONLY JSON: "
-    '{"annual_kg":number,"annual_money_inr":number,"trees":number,"note":str}. '
-    "trees = annual_kg / 21 (a tree absorbs ~21 kg CO2/yr), rounded to 1 decimal. "
-    "Be realistic and encouraging in note."
-)
-
-
-def whatif(change: str) -> dict[str, Any]:
-    """Project the annual payoff of a hypothetical change; offline heuristic fallback."""
-    if NVIDIA_API_KEY:
-        try:
-            data = _extract_json(nvidia_chat(_WHATIF_SYSTEM, change))
-            _ = data["annual_kg"], data["annual_money_inr"]
-            data.setdefault("trees", round(data["annual_kg"] / 21, 1))
-            data["source"] = "nvidia"
-            return data
-        except (requests.RequestException, ValueError, KeyError, TypeError):
-            pass
-    # Heuristic: scale a per-change weekly saving across the year.
-    annual_kg = 180.0
-    return {
-        "annual_kg": annual_kg,
-        "annual_money_inr": 6200,
-        "trees": round(annual_kg / 21, 1),
-        "note": "A consistent weekly change compounds into real yearly savings.",
-        "source": "offline",
-    }
+        return _route_offline(text, hint)
 
 
 # ---------------------------------------------------------------------------
-# Grove ledger — Google Sheet when configured, in-memory otherwise
+# Savings ledger — Google Sheet when configured, in-memory otherwise
 # ---------------------------------------------------------------------------
 
 def sheets_enabled() -> bool:
@@ -272,56 +324,50 @@ def _sheet_session():  # pragma: no cover - thin google-auth wrapper, mocked in 
     return AuthorizedSession(creds)
 
 
-def ledger_append(grove: str, member: str, kg_saved: float, money_inr: float) -> None:
-    """Append one completed-swap row to the Grove ledger."""
+def ledger_append(plan: str, action: str, kg_year: float, inr_year: float) -> None:
+    """Bank a committed savings action for a plan (shared code)."""
     if sheets_enabled():
         try:
             session = _sheet_session()
             session.post(
-                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Grove!A1:D1:append",
+                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Plan!A1:D1:append",
                 params={"valueInputOption": "USER_ENTERED"},
-                json={"values": [[grove, member, kg_saved, money_inr]]},
+                json={"values": [[plan, action, kg_year, inr_year]]},
                 timeout=15,
             )
             return
         except requests.RequestException:
             pass  # degrade to memory so the demo never breaks
-    _MEMORY_LEDGER.setdefault(grove, []).append(
-        {"member": member, "kg": kg_saved, "money": money_inr}
+    _MEMORY_LEDGER.setdefault(plan, []).append(
+        {"action": action, "kg": kg_year, "inr": inr_year}
     )
 
 
-def ledger_state(grove: str) -> dict[str, Any]:
-    """Aggregate a Grove's forest: members, total kg + money saved, streak proxy."""
+def ledger_state(plan: str) -> dict[str, Any]:
+    """Aggregate a plan: committed actions, total ₹/yr and kg/yr on track to save."""
     rows: list[dict[str, Any]] = []
     if sheets_enabled():
         try:
             session = _sheet_session()
             resp = session.get(
-                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Grove!A2:D",
+                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Plan!A2:D",
                 timeout=15,
             )
             for r in resp.json().get("values", []):
-                if len(r) >= 4 and r[0] == grove:
-                    rows.append({"member": r[1], "kg": float(r[2]), "money": float(r[3])})
+                if len(r) >= 4 and r[0] == plan:
+                    rows.append({"action": r[1], "kg": float(r[2]), "inr": float(r[3])})
         except (requests.RequestException, ValueError, KeyError):
-            rows = _MEMORY_LEDGER.get(grove, [])
+            rows = _MEMORY_LEDGER.get(plan, [])
     else:
-        rows = _MEMORY_LEDGER.get(grove, [])
+        rows = _MEMORY_LEDGER.get(plan, [])
 
-    members = sorted({r["member"] for r in rows})
-    total_kg = round(sum(r["kg"] for r in rows), 2)
-    total_money = round(sum(r["money"] for r in rows), 2)
-    goal_kg = 50.0 * max(len(members), 1)
     return {
-        "grove": grove,
-        "members": members,
-        "swaps": len(rows),
-        "total_kg": total_kg,
-        "total_money_inr": total_money,
-        "trees": round(total_kg / 21, 1),
-        "goal_kg": goal_kg,
-        "goal_pct": min(100, round(total_kg / goal_kg * 100)),
+        "plan": plan,
+        "actions": [r["action"] for r in rows],
+        "count": len(rows),
+        "total_kg_year": round(sum(r["kg"] for r in rows), 1),
+        "total_inr_year": round(sum(r["inr"] for r in rows)),
+        "trees": round(sum(r["kg"] for r in rows) / 21, 1),
         "backend": "sheets" if sheets_enabled() else "memory",
     }
 
@@ -331,7 +377,7 @@ def ledger_state(grove: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def clean_input(raw: Any) -> str:
-    """Validate and bound free-text input (security guard against oversized payloads)."""
+    """Validate and bound free-text input (guards against oversized payloads)."""
     if not isinstance(raw, str):
         raise ValueError("expected a string")
     text = raw.strip()
@@ -340,6 +386,20 @@ def clean_input(raw: Any) -> str:
     if len(text) > MAX_INPUT_CHARS:
         raise ValueError(f"input too long (max {MAX_INPUT_CHARS} chars)")
     return text
+
+
+def _as_float(value: Any, default: float) -> float:
+    """Coerce a value to float, falling back to default on bad input."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _error(message: str, status: int) -> Response:
+    resp = jsonify({"ok": False, "error": message})
+    resp.status_code = status
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -360,60 +420,33 @@ def healthz() -> Response:
     return jsonify({"ok": True, "build": BUILD_ID})
 
 
-@app.route("/api/log", methods=["POST"])
-def api_log() -> Response:
-    """Analyse a described day into an itemised footprint + one personalised swap."""
+@app.route("/api/analyze", methods=["POST"])
+def api_analyze() -> Response:
+    """Answer a question. 'mode' is an optional routing hint; otherwise Sprout auto-routes."""
     payload = request.get_json(silent=True) or {}
     try:
-        text = clean_input(payload.get("activity"))
+        text = clean_input(payload.get("input"))
     except ValueError as e:
         return _error(str(e), 400)
-    result = analyze_day(text)
-    result["gauge"] = gauge_status(result["total_kg"])
-    result["equivalence"] = equivalence(result["total_kg"])
-    return jsonify(result)
+    hint = payload.get("mode")
+    hint = hint if hint in MODE_CONFIG else None
+    return jsonify(analyze(text, hint))
 
 
-@app.route("/api/whatif", methods=["POST"])
-def api_whatif() -> Response:
-    """Project the annual ₹ + kg payoff of a hypothetical lifestyle change."""
+@app.route("/api/plan", methods=["POST"])
+def api_plan() -> Response:
+    """Savings plan: 'state' reads the running total; 'commit' banks an action."""
     payload = request.get_json(silent=True) or {}
     try:
-        change = clean_input(payload.get("change"))
+        plan = clean_input(payload.get("plan"))
     except ValueError as e:
         return _error(str(e), 400)
-    return jsonify(whatif(change))
-
-
-@app.route("/api/grove", methods=["POST"])
-def api_grove() -> Response:
-    """Grove actions: 'state' reads the forest; 'log' records a completed swap."""
-    payload = request.get_json(silent=True) or {}
-    try:
-        grove = clean_input(payload.get("grove"))
-    except ValueError as e:
-        return _error(str(e), 400)
-    action = payload.get("action", "state")
-    if action == "log":
-        member = (payload.get("member") or "you").strip()[:40] or "you"
-        kg = _as_float(payload.get("kg_saved"), 0.0)
-        money = _as_float(payload.get("money_inr"), 0.0)
-        ledger_append(grove, member, kg, money)
-    return jsonify(ledger_state(grove))
-
-
-def _as_float(value: Any, default: float) -> float:
-    """Coerce a value to float, falling back to default on bad input."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _error(message: str, status: int) -> Response:
-    resp = jsonify({"ok": False, "error": message})
-    resp.status_code = status
-    return resp
+    if payload.get("action") == "commit":
+        label = (payload.get("label") or "Saving").strip()[:80] or "Saving"
+        kg = _as_float(payload.get("kg_year"), 0.0)
+        inr = _as_float(payload.get("inr_year"), 0.0)
+        ledger_append(plan, label, kg, inr)
+    return jsonify(ledger_state(plan))
 
 
 # ---------------------------------------------------------------------------

@@ -19,8 +19,9 @@
   clip: auto;
   white-space: normal;
 }
-/* Sprout grows with greener days. */
-.sprout-grow { transform: scale(1.25); }
+/* Mode tabs */
+.mode-tab { border-color: rgba(0, 0, 0, 0.12); background: #fff; }
+.mode-tab-active { background: #2f9e44; color: #fff; border-color: #2f9e44; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

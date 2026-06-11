@@ -1,42 +1,46 @@
-# 🌱 Sprout — *Describe your day. See your footprint. Shrink it.*
+# 🌱 Sprout — *Your carbon + money second opinion.*
 
-A daily climate-habit coach. Tell Sprout about your day in one sentence; it itemises
-your carbon footprint, compares it to a sustainable daily target, and gives you **one
-personalised, money-saving swap**. A shared **Grove** (family/team) tracks your streak
-and compounding savings — so you actually come back.
+Ask anything in **one smart box** — a single NVIDIA call detects what you need and answers
+with **specific, money-grounded output**. Six checks:
+
+- **💰 Savings** — a bill / monthly spend → ranked actions with **₹ + kg saved/yr + payback**.
+- **🚆 Trip** — a journey → travel options ranked by **carbon, cost and time**.
+- **🛒 Shop** — an order / receipt / cart → footprint + **cheaper-greener swaps**.
+- **⚖️ Worth it?** — solar / EV / heat pump → **personalised payback** in ₹, kg and years.
+- **🔍 Eco-claim** — a marketing line → **legit / greenwashing** verdict and why.
+- **📊 Footprint** — "what's the footprint of X?" → a number + a relatable comparison.
+
+It **auto-detects** the check from what you type (or pick a chip). Commit a money-saving
+action and it's banked in a shared **plan** (Google Sheet), so the "₹/year you're on track
+to save" compounds — that's the reason to come back.
 
 > Built for **PromptWars** · LLM by **NVIDIA NIM** · **Google** Sheets + Gmail + Calendar.
 
 ## The problem
 
-Most people *want* a smaller carbon footprint but can't act on it because:
+People *want* a lower carbon footprint but trackers fail them: logging is a chore, guilt
+repels, the advice is generic ("use less"), and there's no payoff. **Sprout flips it** —
+near-zero effort in (paste what you already have), concrete value out (real ₹ saved, a
+ranked decision, a verdict), tied to things you do regularly (bills, trips, purchases).
 
-- **Tracking is a chore.** Logging via dropdowns dies after 3 days.
-- **Guilt repels.** "You emitted 12 kg 😞" makes people close the app.
-- **No reason to return.** A static number you've already seen.
-
-Carbon trackers have notoriously bad retention. **Sprout flips the model:** the daily
-action is *receiving* one small swap (a reward), not *entering* data (a chore) — and the
-swap is framed around **money saved**, with lower carbon as the happy side effect.
-
-## How it helps — understand · track · reduce
+## How it helps — understand · reduce · act
 
 | | How |
 |---|---|
-| **Understand** | One-sentence input → itemised kg CO₂e + relatable equivalences + a gauge vs. a 6 kg/day sustainable target. A **What-if** simulator shows the *annual* ₹ + kg payoff of bigger changes. |
-| **Track** | A shared **Grove** ledger (Google Sheet) banks every completed swap — streak, trees' worth, and ₹ saved compound visibly. |
-| **Reduce** | Exactly **one** personalised swap targeting your biggest source, with kg + ₹ saved. One tap adds it to **Google Calendar**; a weekly **Gmail** digest brings the Grove back. |
+| **Understand** | Real inputs (a bill, a trip, a claim) turned into clear numbers — ₹, kg CO₂, payback, time. |
+| **Reduce** | Specific, ranked actions and lower-carbon options — never vague advice. |
+| **Act & track** | One tap **commits** an action to your plan (Google Sheet); **Calendar** reminder + **Gmail** plan summary keep you moving. |
 
 ## Architecture
 
 ```
-Browser (semantic + ARIA, Tailwind CDN, vanilla JS)
-   │  POST /api/log · /api/whatif · /api/grove
+Browser (semantic + ARIA, Tailwind CDN, vanilla JS — 3 mode tabs)
+   │  POST /api/analyze {mode, input}   ·   POST /api/plan {plan, commit}
    ▼
-Flask app.py  ── one NVIDIA NIM call per action (structured JSON, offline fallback)
+Flask app.py  ── one NVIDIA NIM call per question (structured JSON, offline fallback)
    │
-   ├─ Google Sheet  → Grove ledger (streak / savings)            [server-side]
-   └─ Gmail · Calendar · WhatsApp → share + reminders via URL-spec [client-side, no OAuth]
+   ├─ Google Sheet  → savings-plan ledger (₹/yr + kg/yr banked)   [server-side]
+   └─ Gmail · Calendar · WhatsApp → plan summary + reminders        [client-side, no OAuth]
 ```
 
 **Resilience:** every endpoint has a deterministic fallback. If NVIDIA or the Sheet is
@@ -54,7 +58,7 @@ python app.py                 # http://localhost:5050
 ## Test & lint (100% coverage gate)
 
 ```bash
-pytest          # 46 tests, branch coverage gate fails under 100%
+pytest          # 42 tests, branch coverage gate fails under 100%
 ruff check app.py tests/
 ```
 
@@ -79,29 +83,29 @@ curl -sI --compressed $URL/ | grep -i content-encoding   # → gzip
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → enable **Google Sheets API**.
 2. Create a **service account**, download its JSON key.
-3. Create a Sheet with a tab named **Grove**; share it with the service account's
+3. Create a Sheet with a tab named **Plan**; share it with the service account's
    `client_email` (Editor).
 4. Deploy with `SHEET_ID` + `SA_FILE` as above. Without these, Sprout uses an in-memory
-   Grove (great for local demos; resets on restart).
+   plan ledger (great for local demos; resets on restart).
 
 ## 90-second demo script
 
-1. Click **Load sample day** → **Analyse my day**.
-2. NVIDIA itemises 4 activities; the **gauge flips red**, Sprout shrinks to a seedling.
-3. Read the **one swap** ("Swap a beef meal → save 4.8 kg + ₹90").
-4. Drag a **What-if** preset → "Bike to work 2×/week → ~180 kg + ₹6,200/yr".
-5. **Join a Grove** (`sprout-otter-42`) → tap **Did it ✅** → the forest grows, ₹ counter ticks.
-6. **Add reminder 📅** opens Google Calendar; **Email digest ✉️** opens Gmail — prefilled, no login.
-7. Close on the Grove: *"social accountability is why people come back."*
+1. On **✨ Auto**, paste *"my electricity bill is ₹3,200/month with two ACs"* → **Ask**. Badge shows **Detected: Find savings**; NVIDIA returns ranked actions with ₹/yr + payback.
+2. Open a plan (`home-2026`) → tap **Commit ✅** on two actions → the **₹/year counter grows**.
+3. Paste *"Mumbai to Pune, 150 km"* → auto-detects **Trip**: *Train 2.3 kg / ₹500* vs *Drive 23 kg*.
+4. Paste a grocery order → **Shop**: *2 kg beef = 12 kg → swap to lentils, save 10 kg*.
+5. Ask *"is rooftop solar worth it?"* → **Worth it?**: payback ~7 yr, verdict + ₹/yr.
+6. Paste a *"100% sustainable"* fast-fashion line → **Greenwashing 🚩** with reasons.
+7. Back on the plan: **Add to Calendar 📅** / **Email my plan ✉️** / **Share 🔗** — prefilled Google/WhatsApp, no login. Close: *"one box, a real answer to whatever decision you're facing."*
 
 ## Judging-rubric map
 
 | Parameter | Where |
 |---|---|
-| Problem Alignment | understand / track / reduce above; sharp single-action loop |
-| Google Services | Sheets (ledger) · Gmail (digest) · Calendar (reminders) — all load-bearing |
-| Security | Secret Manager · input length caps · no PII · `.gcloudignore` |
-| Testing | `pytest` + `--cov-fail-under=100`, all network mocked (46 tests) |
+| Problem Alignment | understand (real numbers) / reduce (ranked actions) / act (commit + remind) across 3 everyday jobs |
+| Google Services | Sheets (plan ledger) · Gmail (plan email) · Calendar (reminders) — all load-bearing |
+| Security | Secret Manager · input length caps · no PII · HTML-escaped output · `.gcloudignore` |
+| Testing | `pytest` + `--cov-fail-under=100`, all network mocked (42 tests) |
 | Efficiency | gzip middleware · Cache-Control · static caching · 1 LLM call/action · min-instances |
 | Accessibility | skip link · semantic landmarks · ARIA live regions · focus rings · ⌘+Enter · AA contrast · reduced-motion |
 | Code Quality | type hints · docstrings · named constants · ruff · section banners · GitHub Actions CI |
