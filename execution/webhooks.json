@@ -1,0 +1,10 @@
+{
+  "$schema_note": "Each key is a webhook slug. Maps to a directive and the tools that directive is allowed to use.",
+  "webhooks": {
+    "log-emissions": {
+      "directive": "log_emissions.md",
+      "description": "Receive an activity payload, estimate CO2e, append to the tracking sheet, and notify.",
+      "tools": ["send_email", "read_sheet", "update_sheet"]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+# Secrets & credentials
+.env
+credentials.json
+token.json
+
+# Intermediates — always regenerated
+.tmp/
+!.tmp/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store

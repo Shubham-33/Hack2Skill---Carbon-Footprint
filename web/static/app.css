@@ -1,0 +1,41 @@
+/* Small supplements to Tailwind CDN utilities. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+/* Sprout grows with greener days. */
+.sprout-grow { transform: scale(1.25); }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+.toast {
+  background: #1f2a24;
+  color: #f6f8f4;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  max-width: 22rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.toast button {
+  text-decoration: underline;
+  font-weight: 600;
+}
