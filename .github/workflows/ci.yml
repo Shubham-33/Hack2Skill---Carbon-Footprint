@@ -20,8 +20,8 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       - name: Lint (ruff)
-        run: ruff check app.py tests/
+        run: ruff check app.py sprout tests/
       - name: Type-check (mypy)
-        run: mypy app.py --ignore-missing-imports
+        run: mypy app.py sprout --ignore-missing-imports
       - name: Test + 100% coverage gate
         run: pytest

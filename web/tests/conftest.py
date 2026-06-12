@@ -8,11 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pytest  # noqa: E402
 
 import app as app_module  # noqa: E402
-
-
-@pytest.fixture
-def app_mod():
-    return app_module
+from sprout import config, ledger  # noqa: E402
 
 
 @pytest.fixture
@@ -25,12 +21,12 @@ def client():
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch):
     """Each test starts offline, no Sheet, empty in-memory ledger."""
-    app_module._MEMORY_LEDGER.clear()
-    monkeypatch.setattr(app_module, "NVIDIA_API_KEY", "")
-    monkeypatch.setattr(app_module, "SHEET_ID", "")
+    ledger._MEMORY_LEDGER.clear()
+    monkeypatch.setattr(config, "NVIDIA_API_KEY", "")
+    monkeypatch.setattr(config, "SHEET_ID", "")
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT", raising=False)
     yield
-    app_module._MEMORY_LEDGER.clear()
+    ledger._MEMORY_LEDGER.clear()
 
 
 class FakeResp:

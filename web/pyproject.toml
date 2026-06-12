@@ -1,9 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=app --cov-report=term-missing --cov-fail-under=100"
+addopts = "-q --cov=app --cov=sprout --cov-report=term-missing --cov-fail-under=100"
 
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "sprout"]
 branch = true
 
 [tool.coverage.report]

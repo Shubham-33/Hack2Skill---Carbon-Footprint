@@ -34,13 +34,27 @@ ranked decision, a verdict), tied to things you do regularly (bills, trips, purc
 ## Architecture
 
 ```
-Browser (semantic + ARIA, Tailwind CDN, vanilla JS — 3 mode tabs)
+Browser (semantic + ARIA, Tailwind CDN, vanilla JS — one smart input, 6 mode chips)
    │  POST /api/analyze {mode, input}   ·   POST /api/plan {plan, commit}
    ▼
-Flask app.py  ── one NVIDIA NIM call per question (structured JSON, offline fallback)
+Flask (app.py = create_app factory)  ── one NVIDIA NIM call per question
    │
    ├─ Google Sheet  → savings-plan ledger (₹/yr + kg/yr banked)   [server-side]
    └─ Gmail · Calendar · WhatsApp → plan summary + reminders        [client-side, no OAuth]
+```
+
+The backend is a small layered package — each module has one job:
+
+```
+app.py              create_app() factory; entry for `gunicorn app:app`
+sprout/
+  config.py         environment-derived settings
+  estimates.py      deterministic offline fallbacks + keyword routing (LLM-free)
+  llm.py            NVIDIA NIM call + the unified classify-and-answer router
+  ledger.py         savings-plan store (Google Sheet, or in-memory)
+  validation.py     request-input guards
+  routes.py         HTTP endpoints (Flask blueprint)
+  middleware.py     build-id injection + gzip
 ```
 
 **Resilience:** every endpoint has a deterministic fallback. If NVIDIA or the Sheet is
