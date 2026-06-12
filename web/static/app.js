@@ -131,7 +131,7 @@ async function ask() {
 // Renderers (one per check)
 // ---------------------------------------------------------------------------
 function commitButton(label, kgYear, inrYear, text = "Commit ✅") {
-  return `<button class="commit-btn shrink-0 bg-leaf hover:bg-leafdark text-white font-semibold px-3 py-2 rounded-lg focus:ring-2 focus:ring-leaf"
+  return `<button class="commit-btn shrink-0 bg-leafdark hover:bg-leafdarker text-white font-semibold px-3 py-2 rounded-lg focus:ring-2 focus:ring-leaf"
     data-label="${esc(label)}" data-kg="${kgYear}" data-inr="${inrYear}">${text}</button>`;
 }
 

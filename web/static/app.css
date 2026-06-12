@@ -21,7 +21,7 @@
 }
 /* Mode tabs */
 .mode-tab { border-color: rgba(0, 0, 0, 0.12); background: #fff; }
-.mode-tab-active { background: #2f9e44; color: #fff; border-color: #2f9e44; }
+.mode-tab-active { background: #1b7a32; color: #fff; border-color: #1b7a32; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

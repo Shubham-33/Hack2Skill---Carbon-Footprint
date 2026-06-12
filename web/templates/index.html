@@ -9,7 +9,7 @@
   <script>
     tailwind.config = {
       theme: { extend: { colors: {
-        leaf: "#2f9e44", leafdark: "#1b7a32", cream: "#f6f8f4",
+        leaf: "#2f9e44", leafdark: "#1b7a32", leafdarker: "#15692a", cream: "#f6f8f4",
         bark: "#4a3f35", amber: "#e8973c", clay: "#c94c3c", ink: "#1f2a24",
       }, fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] } } },
     };
@@ -61,8 +61,8 @@
         class="w-full rounded-xl border border-black/10 p-4 text-base focus:ring-2 focus:ring-leaf focus:outline-none"></textarea>
       <div class="flex flex-wrap gap-3">
         <button id="ask" type="button"
-          class="bg-leaf hover:bg-leafdark text-white font-semibold px-5 py-3 rounded-xl focus:ring-2 focus:ring-offset-2 focus:ring-leaf">
-          Ask Sprout <span class="text-white/70 text-xs ml-1">⌘↵</span>
+          class="bg-leafdark hover:bg-leafdarker text-white font-semibold px-5 py-3 rounded-xl focus:ring-2 focus:ring-offset-2 focus:ring-leaf">
+          Ask Sprout <span class="text-white text-xs ml-1">⌘↵</span>
         </button>
         <button id="load-sample" type="button"
           class="border border-black/15 hover:bg-black/5 px-5 py-3 rounded-xl focus:ring-2 focus:ring-leaf">Load example</button>
@@ -86,7 +86,7 @@
           class="flex-1 rounded-lg border border-black/10 p-3 focus:ring-2 focus:ring-leaf focus:outline-none"
           placeholder="Plan code, e.g. home-2026" />
         <button id="plan-open" type="button"
-          class="bg-leaf hover:bg-leafdark text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-leaf">Open</button>
+          class="bg-leafdark hover:bg-leafdarker text-white font-semibold px-4 py-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-leaf">Open</button>
       </div>
       <div id="plan-view" class="hidden grid gap-3" aria-live="polite">
         <div class="grid grid-cols-3 gap-3 text-center">
