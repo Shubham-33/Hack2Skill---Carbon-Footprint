@@ -111,7 +111,7 @@ def _first_number(text: str) -> float | None:
 
 def offline_savings(text: str) -> dict[str, Any]:
     """Generic-but-structured savings list when the LLM is unavailable."""
-    actions = [
+    actions: list[dict[str, Any]] = [
         {"action": "Set AC to 24°C instead of 18°C", "saves_inr_year": 3600,
          "saves_kg_year": 210, "effort": "easy", "payback": "immediate"},
         {"action": "Switch your 5 most-used bulbs to LED", "saves_inr_year": 900,
@@ -160,7 +160,7 @@ def offline_claim(text: str) -> dict[str, Any]:
 
 def offline_shop(text: str) -> dict[str, Any]:
     """Generic order breakdown with greener swaps when the LLM is unavailable."""
-    items = [
+    items: list[dict[str, Any]] = [
         {"item": "Highest-impact item in your order", "kg": 3.2,
          "swap": "Pick a local or less-packaged alternative", "saves_kg": 1.1},
         {"item": "A packaged / imported item", "kg": 1.5,
@@ -418,6 +418,18 @@ def index() -> Response:
 def healthz() -> Response:
     """Liveness probe."""
     return jsonify({"ok": True, "build": BUILD_ID})
+
+
+@app.route("/favicon.ico")
+def favicon() -> Response:
+    """Inline 🌱 favicon so browsers don't log a 404 for the missing icon."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<text y=".9em" font-size="90">🌱</text></svg>'
+    )
+    resp = Response(svg, mimetype="image/svg+xml")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
 
 
 @app.route("/api/analyze", methods=["POST"])

@@ -21,5 +21,7 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check app.py tests/
+      - name: Type-check (mypy)
+        run: mypy app.py --ignore-missing-imports
       - name: Test + 100% coverage gate
         run: pytest

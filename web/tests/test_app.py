@@ -312,6 +312,11 @@ def test_healthz(client):
     assert client.get("/healthz").get_json()["ok"] is True
 
 
+def test_favicon(client):
+    r = client.get("/favicon.ico")
+    assert r.status_code == 200 and r.mimetype == "image/svg+xml"
+
+
 def test_api_analyze_invalid_input(client):
     assert client.post("/api/analyze", json={"mode": "savings"}).status_code == 400
 
