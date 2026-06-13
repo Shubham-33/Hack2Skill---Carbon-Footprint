@@ -1,66 +1,61 @@
-# Carbon Footprint
+# 🌱 Sprout — your carbon + money second opinion
 
-> ## 🌱 The hackathon app lives in **[`web/`](web/)** — see **[web/README.md](web/README.md)**.
-> **Sprout** is a daily climate-habit coach (NVIDIA NIM + Google Sheets/Gmail/Calendar),
-> deployed to Cloud Run. That's the PromptWars submission. The 3-layer scaffold below is
-> the supporting automation system.
+[![CI](https://github.com/Shubham-33/Hack2Skill---Carbon-Footprint/actions/workflows/ci.yml/badge.svg)](https://github.com/Shubham-33/Hack2Skill---Carbon-Footprint/actions)
+![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
+![type-checked](https://img.shields.io/badge/mypy-clean-blue)
 
----
+Ask anything in **one box** — a bill, a trip, a product, an eco-claim, an order, or
+*"is solar worth it?"* — and a single NVIDIA NIM call detects what you need and answers
+with **specific, money-grounded output**. Built for **PromptWars / Hack2Skill**.
 
-## 3-Layer Agent System
+🔗 **Live:** https://sprout-h2izdenmlq-uc.a.run.app
+📦 **The app lives in [`web/`](web/)** — see **[web/README.md](web/README.md)** for full docs.
 
-A directive-driven agent system that separates **intent** (Markdown SOPs) from
-**decision-making** (the LLM orchestrator) from **execution** (deterministic
-Python). See [CLAUDE.md](CLAUDE.md) for the full operating contract.
+## The problem
 
-## Layout
+People want a lower carbon footprint but trackers fail them: logging is a chore, guilt
+repels, the advice is generic, and there's no payoff. **Sprout flips it** — near-zero
+effort in (paste what you already have), concrete value out (real ₹ saved, a ranked
+decision, a verdict), tied to things you do regularly (bills, trips, purchases).
 
-```
-CLAUDE.md / AGENTS.md / GEMINI.md   Agent instructions (mirrored)
-directives/                          Layer 1 — SOPs in Markdown
-  add_webhook.md                     How to add a new webhook
-  log_emissions.md                   Estimate CO2e → append to sheet
-execution/                           Layer 3 — deterministic tools
-  _common.py                         env / JSON result / Slack helpers
-  send_email.py                      SMTP send
-  read_sheet.py  update_sheet.py     Google Sheets I/O
-  sheets_client.py                   Shared Sheets auth
-  estimate_emissions.py             Activity → kg CO2e (Climatiq + offline fallback)
-  webhooks.json                      slug → directive + scoped tools
-  modal_webhook.py                   Modal app exposing webhooks
-.tmp/                                Intermediates (gitignored)
-.env.example                         Copy to .env and fill in
-```
+## Six checks, one smart input
 
-## Setup
+| Check | You paste | You get |
+|---|---|---|
+| 💰 Savings | a bill / monthly spend | ranked actions with ₹ + kg saved/yr + payback |
+| 🚆 Trip | a journey | travel options ranked by carbon, cost, time |
+| 🛒 Shop | an order / receipt | footprint + cheaper-greener swaps |
+| ⚖️ Worth it? | solar / EV / heat pump | personalised payback in ₹, kg, years |
+| 🔍 Eco-claim | a marketing line | legit / greenwashing verdict + why |
+| 📊 Footprint | "footprint of X?" | a number + a relatable comparison |
+
+Commit a saving and it banks into a shared **plan** (Google Sheet); the ₹/yr on track to
+save compounds — the reason to come back. Distribution via Gmail / Calendar / WhatsApp
+URL-specs (no OAuth).
+
+## Tech
+
+- **Backend:** Python / Flask, a layered [`sprout`](web/sprout/) package (config · estimates ·
+  llm · ledger · validation · routes · middleware) assembled by a `create_app()` factory.
+- **LLM:** NVIDIA NIM (`llama-3.3-70b-instruct`, OpenAI-compatible REST) — one call per
+  question, with a deterministic offline fallback so it never dies on stage.
+- **Google:** Sheets (ledger) + Gmail + Calendar.
+- **Quality:** 100% test coverage gate, `ruff` + `mypy` clean, GitHub Actions CI, gzip +
+  Secret Manager, WCAG-AA accessibility. Deployed to Cloud Run.
+
+## Quick start
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env          # then fill in your keys
+cd web
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env          # optional: add NVIDIA_API_KEY (works without it via fallback)
+python app.py                 # http://localhost:5050
+pytest                        # 58 tests, 100% coverage gate
 ```
 
-## Try a tool (offline, no keys needed)
+Full run / test / deploy instructions: **[web/README.md](web/README.md)**.
 
-```bash
-cd execution
-python estimate_emissions.py --activity car_petrol --amount 40 --unit km
-# -> {"ok": true, "co2e_kg": 6.8, "source": "builtin", ...}
-```
+## License
 
-## Run a directive (orchestrator path)
-
-Tell your agent: *"Log emissions: 40 km in a petrol car, sheet `<ID>`."*
-It reads [directives/log_emissions.md](directives/log_emissions.md) and calls the
-execution scripts in order.
-
-## Webhooks
-
-To add one, see [directives/add_webhook.md](directives/add_webhook.md). Deploy with
-`modal deploy execution/modal_webhook.py` (requires the `claude-orchestrator-secrets`
-Modal secret).
-
-## Notes
-
-- Built-in emission factors are rough public averages — demo-grade, not for compliance.
-- Use the latest capable Claude model (currently Opus 4.8) when building.
+[MIT](LICENSE)
