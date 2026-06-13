@@ -12,7 +12,8 @@ const MODES = {
   },
   savings: {
     hint: "Paste your bill, fuel, or monthly spend → specific actions that save real ₹ + carbon.",
-    sample: "Monthly electricity bill ₹3,200 with two ACs ~6 hours a day, plus ₹4,000/month on petrol commuting.",
+    sample:
+      "Monthly electricity bill ₹3,200 with two ACs ~6 hours a day, plus ₹4,000/month on petrol commuting.",
   },
   trip: {
     hint: "Describe a trip → options ranked by carbon, cost and time.",
@@ -28,7 +29,8 @@ const MODES = {
   },
   claim: {
     hint: "Paste an “eco-friendly” marketing line → legit or greenwashing, and why.",
-    sample: "This fast-fashion brand says its collection is “100% sustainable and carbon neutral, made from eco-conscious fabrics”.",
+    sample:
+      "This fast-fashion brand says its collection is “100% sustainable and carbon neutral, made from eco-conscious fabrics”.",
   },
   lookup: {
     hint: "Ask “what's the footprint of X?” → a number + a relatable comparison.",
@@ -37,8 +39,12 @@ const MODES = {
 };
 
 const LABEL = {
-  savings: "Find savings 💰", trip: "Greener trip 🚆", claim: "Eco-claim 🔍",
-  shop: "Shopping 🛒", worth: "Worth it? ⚖️", lookup: "Footprint 📊",
+  savings: "Find savings 💰",
+  trip: "Greener trip 🚆",
+  claim: "Eco-claim 🔍",
+  shop: "Shopping 🛒",
+  worth: "Worth it? ⚖️",
+  lookup: "Footprint 📊",
 };
 
 let currentMode = "auto";
@@ -67,14 +73,18 @@ function toast(message, actions = [], sticky = false) {
   actions.forEach((a) => {
     const b = document.createElement("button");
     b.textContent = a.label;
-    b.onclick = () => { a.onClick(); el.remove(); };
+    b.onclick = () => {
+      a.onClick();
+      el.remove();
+    };
     el.appendChild(b);
   });
   $("toast-root").appendChild(el);
   if (!sticky) setTimeout(() => el.remove(), 6000);
 }
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const EFFORT_TINT = { easy: "#2f9e44", medium: "#e8973c", hard: "#c94c3c" };
 const VERDICT = {
   legit: { label: "Looks legit ✅", color: "#2f9e44" },
@@ -103,7 +113,10 @@ function setMode(mode) {
 // ---------------------------------------------------------------------------
 async function ask() {
   const input = $("ask-input").value.trim();
-  if (!input) { toast("Type or paste your question first 🙂"); return; }
+  if (!input) {
+    toast("Type or paste your question first 🙂");
+    return;
+  }
   $("ask").disabled = true;
   const label = $("ask").innerHTML;
   $("ask").textContent = "Thinking…";
@@ -139,7 +152,8 @@ function wireCommits() {
   document.querySelectorAll(".commit-btn").forEach((b) => {
     b.onclick = () => {
       commit(b.dataset.label, +b.dataset.kg, +b.dataset.inr);
-      b.textContent = "Banked 🌿"; b.disabled = true;
+      b.textContent = "Banked 🌿";
+      b.disabled = true;
     };
   });
 }
@@ -148,13 +162,17 @@ const RENDER = {
   savings(d) {
     const actions = [...d.actions].sort((a, b) => b.saves_inr_year - a.saves_inr_year);
     const total = actions.reduce((s, a) => s + a.saves_inr_year, 0);
-    const cards = actions.map((a) => `
+    const cards = actions
+      .map(
+        (a) => `
       <li class="bg-white rounded-xl border border-black/5 p-4 flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0"><p class="font-semibold">${esc(a.action)}</p>
           <p class="text-sm text-bark">₹${a.saves_inr_year}/yr · ${a.saves_kg_year} kg/yr ·
             <span style="color:${EFFORT_TINT[a.effort] || "#4a3f35"}">${esc(a.effort)}</span> · payback ${esc(a.payback)}</p></div>
         ${commitButton(a.action, a.saves_kg_year, a.saves_inr_year)}
-      </li>`).join("");
+      </li>`,
+      )
+      .join("");
     $("result-body").innerHTML = `
       <div class="bg-leaf/10 border border-leaf/30 rounded-2xl p-5">
         <p class="text-xl font-bold text-leafdark">₹${total}/year in savings found</p>
@@ -165,13 +183,15 @@ const RENDER = {
 
   trip(d) {
     const opts = [...d.options].sort((a, b) => a.kg - b.kg);
-    const rows = opts.map((o) => {
-      const best = o.mode === d.best;
-      return `<li class="bg-white rounded-xl border ${best ? "border-leaf" : "border-black/5"} p-4 flex flex-wrap justify-between gap-2">
+    const rows = opts
+      .map((o) => {
+        const best = o.mode === d.best;
+        return `<li class="bg-white rounded-xl border ${best ? "border-leaf" : "border-black/5"} p-4 flex flex-wrap justify-between gap-2">
         <div><p class="font-semibold">${esc(o.mode)} ${best ? '<span class="text-leafdark text-xs">★ best</span>' : ""}</p>
           <p class="text-sm text-bark">${esc(o.note || "")}</p></div>
         <div class="text-sm text-right text-bark"><p><strong>${o.kg} kg</strong> CO₂</p><p>₹${o.cost_inr} · ${esc(o.time)}</p></div></li>`;
-    }).join("");
+      })
+      .join("");
     $("result-body").innerHTML = `
       <div class="bg-white rounded-2xl p-5 shadow-sm">
         <p class="text-lg font-bold">${esc(d.from)} → ${esc(d.to)} · ~${d.distance_km} km</p>
@@ -191,12 +211,16 @@ const RENDER = {
   },
 
   shop(d) {
-    const items = (d.items || []).map((it) => `
+    const items = (d.items || [])
+      .map(
+        (it) => `
       <li class="bg-white rounded-xl border border-black/5 p-4 flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0"><p class="font-semibold">${esc(it.item)} · ${it.kg} kg</p>
           <p class="text-sm text-bark">Swap: ${esc(it.swap)} (saves ${it.saves_kg} kg)</p></div>
         ${commitButton("Shop swap: " + it.swap, (it.saves_kg || 0) * 52, 0)}
-      </li>`).join("");
+      </li>`,
+      )
+      .join("");
     $("result-body").innerHTML = `
       <div class="bg-white rounded-2xl p-5 shadow-sm">
         <p class="text-xl font-bold">${d.total_kg} kg CO₂e in this order</p>
@@ -233,22 +257,36 @@ const RENDER = {
 // ---------------------------------------------------------------------------
 // Savings plan ledger
 // ---------------------------------------------------------------------------
-function planCode() { return $("plan-code").value.trim(); }
+function planCode() {
+  return $("plan-code").value.trim();
+}
 
 function commit(label, kgYear, inrYear) {
   const plan = planCode();
-  if (!plan) { toast("Open a plan first to bank your savings 🌳", [{ label: "OK", onClick: () => $("plan-code").focus() }]); return; }
+  if (!plan) {
+    toast("Open a plan first to bank your savings 🌳", [
+      { label: "OK", onClick: () => $("plan-code").focus() },
+    ]);
+    return;
+  }
   postJSON("/api/plan", { plan, action: "commit", label, kg_year: kgYear, inr_year: inrYear })
-    .then(renderPlan).then(() => toast("Banked! Your plan just grew 🌿")).catch((e) => toast(e.message));
+    .then(renderPlan)
+    .then(() => toast("Banked! Your plan just grew 🌿"))
+    .catch((e) => toast(e.message));
 }
 
 async function openPlan() {
   const plan = planCode();
-  if (!plan) { toast("Enter a plan code"); return; }
+  if (!plan) {
+    toast("Enter a plan code");
+    return;
+  }
   try {
     renderPlan(await postJSON("/api/plan", { plan }));
     localStorage.setItem("sprout:plan", plan);
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+  }
 }
 
 function renderPlan(s) {
@@ -256,27 +294,38 @@ function renderPlan(s) {
   $("plan-inr").textContent = "₹" + s.total_inr_year;
   $("plan-kg").textContent = s.total_kg_year;
   $("plan-trees").textContent = s.trees;
-  $("plan-actions").innerHTML = s.actions.map((a) => `<li class="bg-cream rounded-lg px-3 py-2">✅ ${esc(a)}</li>`).join("")
-    || '<li class="text-bark">No actions yet — commit one above.</li>';
+  $("plan-actions").innerHTML =
+    s.actions.map((a) => `<li class="bg-cream rounded-lg px-3 py-2">✅ ${esc(a)}</li>`).join("") ||
+    '<li class="text-bark">No actions yet — commit one above.</li>';
 }
 
 function planReminder() {
   const text = encodeURIComponent("Sprout: start my savings actions");
-  const details = encodeURIComponent(`On track to save ${$("plan-inr").textContent}/yr and ${$("plan-kg").textContent} kg CO₂. — Sprout`);
-  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${details}`, "_blank", "noopener");
+  const details = encodeURIComponent(
+    `On track to save ${$("plan-inr").textContent}/yr and ${$("plan-kg").textContent} kg CO₂. — Sprout`,
+  );
+  window.open(
+    `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${details}`,
+    "_blank",
+    "noopener",
+  );
 }
 
 function planEmail() {
   const su = encodeURIComponent(`My Sprout plan: ${$("plan-inr").textContent}/yr in savings`);
   const items = [...document.querySelectorAll("#plan-actions li")].map((li) => li.textContent).join("\n");
-  const body = encodeURIComponent(`My savings plan (${planCode() || "plan"}):\n\n${items}\n\nOn track: ${$("plan-inr").textContent}/yr, ${$("plan-kg").textContent} kg CO₂/yr.`);
+  const body = encodeURIComponent(
+    `My savings plan (${planCode() || "plan"}):\n\n${items}\n\nOn track: ${$("plan-inr").textContent}/yr, ${$("plan-kg").textContent} kg CO₂/yr.`,
+  );
   window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${su}&body=${body}`, "_blank", "noopener");
 }
 
 function planShare() {
   const plan = planCode() || "sprout-plan";
   const link = `${location.origin}/?plan=${encodeURIComponent(plan)}`;
-  const text = encodeURIComponent(`Join my Sprout savings plan — let's cut bills + carbon together 🌳 ${link}`);
+  const text = encodeURIComponent(
+    `Join my Sprout savings plan — let's cut bills + carbon together 🌳 ${link}`,
+  );
   window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
 }
 
@@ -284,9 +333,14 @@ function planShare() {
 // Wire up
 // ---------------------------------------------------------------------------
 function init() {
-  document.querySelectorAll(".mode-tab").forEach((t) => { t.onclick = () => setMode(t.dataset.mode); });
+  document.querySelectorAll(".mode-tab").forEach((t) => {
+    t.onclick = () => setMode(t.dataset.mode);
+  });
   $("ask").onclick = ask;
-  $("load-sample").onclick = () => { $("ask-input").value = MODES[currentMode].sample; $("ask-input").focus(); };
+  $("load-sample").onclick = () => {
+    $("ask-input").value = MODES[currentMode].sample;
+    $("ask-input").focus();
+  };
   $("plan-open").onclick = openPlan;
   $("plan-remind").onclick = planReminder;
   $("plan-email").onclick = planEmail;
@@ -298,7 +352,10 @@ function init() {
 
   const params = new URLSearchParams(location.search);
   const p = params.get("plan") || localStorage.getItem("sprout:plan");
-  if (p) { $("plan-code").value = p; openPlan(); }
+  if (p) {
+    $("plan-code").value = p;
+    openPlan();
+  }
 
   setMode("auto");
 }

@@ -20,10 +20,20 @@
   white-space: normal;
 }
 /* Mode tabs */
-.mode-tab { border-color: rgba(0, 0, 0, 0.12); background: #fff; }
-.mode-tab-active { background: #1b7a32; color: #fff; border-color: #1b7a32; }
+.mode-tab {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: #fff;
+}
+.mode-tab-active {
+  background: #1b7a32;
+  color: #fff;
+  border-color: #1b7a32;
+}
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 .toast {
   background: #1f2a24;
